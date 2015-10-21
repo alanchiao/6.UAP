@@ -5,7 +5,7 @@
 int main(int argc, char** argv) {
 	const int MESSAGE_TAG = 10;
 
-	MPI_Init(NULL, NULL);
+	MPI_Init(&argc, &argv);
 	
 	int world_rank;
 	MPI_Comm_rank(MPI_COMM_WORLD, &world_rank);
