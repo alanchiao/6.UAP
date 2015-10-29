@@ -1,5 +1,9 @@
-read_png:
-	gcc read_png.c -lpng16 -o read_png
+gb:	
+	gcc gb.c -lpng16 -o gb
+
+blur:
+	gcc blur.c -lpng16 -o blur 
 
 clean:
-	rm read_png
+	rm gb blur
+	

@@ -149,22 +149,10 @@ void write_png_file(char* file_name)
 
 void process_file(void)
 {
-    /*
-        if (png_get_color_type(png_ptr, info_ptr) == PNG_COLOR_TYPE_RGB)
-                abort_("[process_file] input file is PNG_COLOR_TYPE_RGB but must be PNG_COLOR_TYPE_RGBA "
-                       "(lacks the alpha channel)");
-
-        if (png_get_color_type(png_ptr, info_ptr) != PNG_COLOR_TYPE_RGBA)
-                abort_("[process_file] color_type of input file must be PNG_COLOR_TYPE_RGBA (%d) (is %d)",
-                       PNG_COLOR_TYPE_RGBA, png_get_color_type(png_ptr, info_ptr));
-    **/
-
         for (y=0; y<height; y++) {
                 png_byte* row = row_pointers[y];
                 for (x=0; x<width; x++) {
                         png_byte* ptr = &(row[x*3]);
-                        //printf("Pixel at position [ %d - %d ] has RGBA values: %d - %d - %d - %d\n",
-                        //       x, y, ptr[0], ptr[1], ptr[2], ptr[3]);
                         printf("Pixel at position [ %d - %d ] has RGB values: %d - %d - %d\n",
                                x, y, ptr[0], ptr[1], ptr[2]);
 
