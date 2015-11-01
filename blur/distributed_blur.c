@@ -9,6 +9,11 @@
 #define PNG_DEBUG 3
 #include <png.h>
 
+
+//////////////////////////////////////////////////
+// Generic read and write logic. Only for checking
+// that output stays consistent between versions
+
 void abort_(const char * s, ...)
 {
 	va_list args;
@@ -32,7 +37,7 @@ png_bytep * row_pointers;
 png_bytep * row_pointers_post_bh; // bh(x,y)
 png_bytep * row_pointers_post_bv; // bv(x,y)
 
-void read_png_file(char* file_name)
+void read_png_file(char* file_name, png_bytep **row_pointers)
 {
 	char header[8];    // 8 is the maximum size that can be checked
 
@@ -76,9 +81,9 @@ void read_png_file(char* file_name)
 		abort_("[read_png_file] Error during read_image");
 
 	// initialize data structures
-	row_pointers = (png_bytep*) malloc(sizeof(png_bytep) * height);
+	*row_pointers = (png_bytep*) malloc(sizeof(png_bytep) * height);
 	for (y=0; y<height; y++)
-		row_pointers[y] = (png_byte*) malloc(png_get_rowbytes(png_ptr,info_ptr));
+		(*row_pointers)[y] = (png_byte*) malloc(png_get_rowbytes(png_ptr,info_ptr));
 
 	row_pointers_post_bh = (png_bytep*) malloc(sizeof(png_bytep) * height);
 	for (y=0; y<height; y++)
@@ -88,7 +93,7 @@ void read_png_file(char* file_name)
 	for (y=0; y<height; y++)
 		row_pointers_post_bv[y] = (png_byte*) malloc(png_get_rowbytes(png_ptr,info_ptr));
 
-	png_read_image(png_ptr, row_pointers);
+	png_read_image(png_ptr, *row_pointers);
 
 	fclose(fp);
 }
@@ -153,6 +158,10 @@ void write_png_file(char* file_name)
 
 	fclose(fp);
 }
+
+
+//////////////////////////////////////////////////////////
+// Main blur and distributed logic
 
 
 void blur(void)
@@ -238,6 +247,8 @@ void blur(void)
 	}
 }
 
+////////////////////////////////////////////////////////////////
+// Main setup
 
 int main(int argc, char **argv)
 {
@@ -258,7 +269,7 @@ int main(int argc, char **argv)
 
     printf( "Hello world from processor %s, rank %d of %d\n", processor_name, world_rank, world_size);
 
-	read_png_file(argv[1]);
+	read_png_file(argv[1], &row_pointers);
 	
 	// const fasttime_t start_time = gettime();	
 	blur();
