@@ -1,3 +1,5 @@
+#include <mpi.h>
+
 #include <unistd.h>
 #include <stdlib.h> 
 #include <stdio.h>
@@ -242,9 +244,29 @@ int main(int argc, char **argv)
 	if (argc != 3)
 		abort_("Usage: program_name <file_in> <file_out>");
 
+	MPI_Init(&argc, &argv);
+	
+	int world_rank;
+	MPI_Comm_rank(MPI_COMM_WORLD, &world_rank);
+
+	int world_size;
+	MPI_Comm_size(MPI_COMM_WORLD, &world_size);
+
+	char processor_name[MPI_MAX_PROCESSOR_NAME];
+	int name_len;
+	MPI_Get_processor_name(processor_name, &name_len);
+
+    printf( "Hello world from processor %s, rank %d of %d\n", processor_name, world_rank, world_size);
+
 	read_png_file(argv[1]);
+	
+	// const fasttime_t start_time = gettime();	
 	blur();
+	// const fasttime_t end_time = gettime();	
+	// printf("Elapsed execution time: %fs\n", tdiff(start_time, end_time));
 	write_png_file(argv[2]);
+
+	MPI_Finalize();
 	return 0;
 }
 

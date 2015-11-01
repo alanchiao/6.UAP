@@ -10,8 +10,8 @@ mpi_hello:
 mpi_send_receive:
 	mpicc mpi_send_receive.c -o send_receive
 
-run:
-	srun -N 2 ./${EXE}
+mpirun:
+	mpirun -N 2 ./${EXE}
 
 clean:
 	rm hello send_receive
