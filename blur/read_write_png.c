@@ -23,9 +23,10 @@ void abort_(const char * s, ...)
 }
 
 // closes file
-void read_png_file(png_bytep **row_pointers, png_info_t *png_info)
+void read_png_file(png_bytep **row_pointers, png_info_t *png_info, FILE* fp)
 {
 	png_read_image(png_info->png_ptr, *row_pointers);
+	fclose(fp);
 }
 
 // note : does not close file

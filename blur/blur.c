@@ -97,8 +97,7 @@ void write_png_file(char* file_name)
 	/* create file */
 	FILE *fp = fopen(file_name, "wb");
 	if (!fp)
-			abort_("[write_png_file] File %s could not be opened for writing", file_name);
-
+		abort_("[write_png_file] File %s could not be opened for writing", file_name);
 
 	/* initialize stuff */
 	png_ptr = png_create_write_struct(PNG_LIBPNG_VER_STRING, NULL, NULL, NULL);
@@ -131,7 +130,7 @@ void write_png_file(char* file_name)
 	if (setjmp(png_jmpbuf(png_ptr)))
 		abort_("[write_png_file] Error during writing bytes");
 
-	png_write_image(png_ptr, row_pointers_post_bh);
+	png_write_image(png_ptr, row_pointers_post_bv);
 
 
 	/* end write */
@@ -155,6 +154,7 @@ void write_png_file(char* file_name)
 
 void blur(void)
 {
+
 	// horizontal blur
 	for (y=0; y<height; y++) {
 		png_byte* row = row_pointers[y];
