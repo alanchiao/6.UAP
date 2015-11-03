@@ -9,7 +9,7 @@
 #include <unistd.h>
 #include <stdlib.h>
 #include <stdio.h>
-#include <string.h>
+#include <string.h> 
 #include <stdarg.h>
 
 #define PNG_DEBUG 3
@@ -87,6 +87,20 @@ void read_png_file(char* file_name)
         png_read_image(png_ptr, row_pointers);
 
         fclose(fp);
+}
+
+void write_png_to_static_c(char* file_name)
+{
+	FILE *fp = fopen(file_name, "wb");
+	for (y=0; y<height; y++) {
+		png_byte* row = row_pointers[y];
+		for (x=0; x<width; x++) {
+			png_byte* ptr = &(row[x*3]);
+			fprintf(fp, "%d, %d, %d", ptr[0], ptr[1], ptr[2]);
+		}
+		fprintf(fp, "\n");
+	}
+	fclose(fp);
 }
 
 
@@ -171,6 +185,7 @@ int main(int argc, char **argv)
 
         read_png_file(argv[1]);
         process_file();
+		write_png_to_static_c("rgb_static.txt");
         write_png_file(argv[2]);
 
         return 0;

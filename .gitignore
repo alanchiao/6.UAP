@@ -1,8 +1,11 @@
 mpi_testing/hello
 mpi_testing/send_receive
-png_processing/distributed_blur
-png_processing/blur
-png_processing/compare
+blur/distributed_blur
+blur/blur
+blur/compare
+blur/*out.png
+blur/*.txt
+blur/*.o
 png_processing/gb
 png_processing/*out.png
 png_processing/*.txt

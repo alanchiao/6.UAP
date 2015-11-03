@@ -17,7 +17,7 @@ compare:
 	gcc compare.c -lpng16 -o compare -g -O0 -gdwarf-3 read_write_png.o
 
 run_distributed_blur:
-	mpirun -N 1 ./distributed_blur rgb.png distributed_blur_out.png
+	mpirun -N 2 ./distributed_blur rgb.png distributed_blur_out.png
 
 run_blur:
 	./blur rgb.png blur_out.png
