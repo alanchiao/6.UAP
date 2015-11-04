@@ -11,6 +11,11 @@
 #include "read_write_png.h"
 #include "distributed_blur.h"
 
+#define BLUR_COMM_TAG 5
+
+
+int world_rank;
+int world_size;
 png_bytep * row_pointers;
 png_bytep * row_pointers_post_bh; // bh(x,y)
 png_bytep * row_pointers_post_bv; // bv(x,y)
@@ -50,10 +55,32 @@ void blur(png_info_t *png_info, distributed_info_t *distributed_info)
 	}
 
 	// vertical blur : NEED REGION = HAVE REGION  + ONE LINE ABOVE AND BELOW.
-
 	// Communication of Intersect(N, H) to rank - 1 and + 1.
 	// Receiving necessary data from rank - 1 and + 1 also.
+	png_bytep * top_row_pointers = (png_bytep *) malloc(sizeof(png_bytep));
+	top_row_pointers[0] = (png_byte*) malloc(png_get_rowbytes(png_info->png_ptr,png_info->info_ptr));
+	png_bytep * bottom_row_pointers = (png_bytep *) malloc(sizeof(png_bytep));
+	bottom_row_pointers[0] = (png_byte*) malloc(png_get_rowbytes(png_info->png_ptr,png_info->info_ptr));
 
+	if (world_rank != world_size - 1) {
+		MPI_Send(&(row_pointers_post_bv[distributed_info->local_max_height - 1]), png_get_rowbytes(png_info->png_ptr,png_info->info_ptr),
+				 MPI_BYTE, world_rank + 1, BLUR_COMM_TAG, 
+				 MPI_COMM_WORLD);
+		MPI_Recv(top_row_pointers, png_get_rowbytes(png_info->png_ptr,png_info->info_ptr),
+				 MPI_BYTE, world_rank + 1, BLUR_COMM_TAG, 
+				 MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+	}
+
+	if (world_rank != 0) {
+		MPI_Send(&(row_pointers_post_bv[distributed_info->local_min_height]), png_get_rowbytes(png_info->png_ptr,png_info->info_ptr),
+				 MPI_BYTE, world_rank - 1, BLUR_COMM_TAG, 
+				 MPI_COMM_WORLD);
+		/**
+		MPI_Recv(&bottom_row_pointers, (png_info->width),
+				 MPI_BYTE, world_rank - 1, BLUR_COMM_TAG, 
+				 MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+		**/
+	}
 
 	// Actual computations
 	for (int y = distributed_info->local_min_height; y < distributed_info->local_max_height; y++) {
@@ -96,6 +123,12 @@ void blur(png_info_t *png_info, distributed_info_t *distributed_info)
 			}
 		}
 	}
+	/**
+	free(top_row_pointers[0]);
+	free(bottom_row_pointers[0]);
+	free(top_row_pointers);
+	free(bottom_row_pointers);
+	**/
 }
 
 ////////////////////////////////////////////////////////////////
@@ -108,10 +141,8 @@ int main(int argc, char **argv)
 
 	MPI_Init(&argc, &argv);
 	
-	int world_rank;
 	MPI_Comm_rank(MPI_COMM_WORLD, &world_rank);
 
-	int world_size;
 	MPI_Comm_size(MPI_COMM_WORLD, &world_size);
 
 	char processor_name[MPI_MAX_PROCESSOR_NAME];
@@ -161,6 +192,9 @@ int main(int argc, char **argv)
 	blur(png_info, distributed_info); // region goes from local_min_height to local_max_height - 1
 	// Write file + cleanup logic
 	write_png_file(argv[2], &row_pointers_post_bv, png_info);
+
+	// free(distributed_info);
+	/**
 	for (int y = 0; y < png_info->height; y++) {
 		free(row_pointers[y]);
 		free(row_pointers_post_bh[y]);
@@ -169,6 +203,8 @@ int main(int argc, char **argv)
 	free(row_pointers);
 	free(row_pointers_post_bh);
 	free(row_pointers_post_bv);
+	free(png_info);
+	**/
 
 	MPI_Finalize();
 	return 0;
