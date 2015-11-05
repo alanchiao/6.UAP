@@ -60,13 +60,13 @@ void blur(png_info_t *png_info, distributed_info_t *distributed_info)
 	png_bytep * top_row_pointers = (png_bytep *) malloc(sizeof(png_bytep));
 	top_row_pointers[0] = (png_byte*) malloc(png_get_rowbytes(png_info->png_ptr,png_info->info_ptr));
 	png_bytep * bottom_row_pointers = (png_bytep *) malloc(sizeof(png_bytep));
-	bottom_row_pointers[0] = (png_byte*) malloc(png_get_rowbytes(png_info->png_ptr,png_info->info_ptr));
+	bottom_row_pointers[0] = (png_byte*) malloc(png_get_rowbytes(png_info->png_ptr,png_info->info_ptr) + 1);
 
 	if (world_rank != world_size - 1) {
 		MPI_Send(&(row_pointers_post_bv[distributed_info->local_max_height - 1]), png_get_rowbytes(png_info->png_ptr,png_info->info_ptr),
 				 MPI_BYTE, world_rank + 1, BLUR_COMM_TAG, 
-				 MPI_COMM_WORLD);
-		MPI_Recv(top_row_pointers, png_get_rowbytes(png_info->png_ptr,png_info->info_ptr),
+    		     MPI_COMM_WORLD);
+		MPI_Recv(top_row_pointers[0], png_get_rowbytes(png_info->png_ptr,png_info->info_ptr),
 				 MPI_BYTE, world_rank + 1, BLUR_COMM_TAG, 
 				 MPI_COMM_WORLD, MPI_STATUS_IGNORE);
 	}
@@ -75,11 +75,9 @@ void blur(png_info_t *png_info, distributed_info_t *distributed_info)
 		MPI_Send(&(row_pointers_post_bv[distributed_info->local_min_height]), png_get_rowbytes(png_info->png_ptr,png_info->info_ptr),
 				 MPI_BYTE, world_rank - 1, BLUR_COMM_TAG, 
 				 MPI_COMM_WORLD);
-		/**
-		MPI_Recv(&bottom_row_pointers, (png_info->width),
+		MPI_Recv(bottom_row_pointers[0], png_get_rowbytes(png_info->png_ptr, png_info->info_ptr),
 				 MPI_BYTE, world_rank - 1, BLUR_COMM_TAG, 
 				 MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-		**/
 	}
 
 	// Actual computations
@@ -123,12 +121,10 @@ void blur(png_info_t *png_info, distributed_info_t *distributed_info)
 			}
 		}
 	}
-	/**
 	free(top_row_pointers[0]);
 	free(bottom_row_pointers[0]);
 	free(top_row_pointers);
 	free(bottom_row_pointers);
-	**/
 }
 
 ////////////////////////////////////////////////////////////////
@@ -193,8 +189,7 @@ int main(int argc, char **argv)
 	// Write file + cleanup logic
 	write_png_file(argv[2], &row_pointers_post_bv, png_info);
 
-	// free(distributed_info);
-	/**
+	free(distributed_info);
 	for (int y = 0; y < png_info->height; y++) {
 		free(row_pointers[y]);
 		free(row_pointers_post_bh[y]);
@@ -204,7 +199,6 @@ int main(int argc, char **argv)
 	free(row_pointers_post_bh);
 	free(row_pointers_post_bv);
 	free(png_info);
-	**/
 
 	MPI_Finalize();
 	return 0;
