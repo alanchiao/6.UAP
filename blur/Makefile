@@ -2,6 +2,7 @@ build:
 	make read_write_png
 	make blur
 	make distributed_blur
+	make distributed_blur_segments
 	make compare
 
 read_write_png:
@@ -13,11 +14,17 @@ blur:
 distributed_blur:
 	mpicc distributed_blur.c -lpng16 -o distributed_blur read_write_png.o
 
+distributed_blur_segments:
+	mpicc distributed_blur_segments.c -lpng16 -o distributed_blur_segments read_write_png.o
+
 compare:
 	gcc compare.c -lpng16 -o compare -g -O0 -gdwarf-3 read_write_png.o
 
 run_distributed_blur:
 	mpirun -N 2 ./distributed_blur rgb.png distributed_blur_out.png
+
+run_distributed_blur_segments:
+	mpirun -N 2 ./distributed_blur_segments rgb.png distributed_blur_segments_out.png
 
 run_blur:
 	./blur rgb.png blur_out.png

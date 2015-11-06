@@ -12,6 +12,7 @@
 #include "distributed_blur.h"
 
 #define BLUR_COMM_TAG 5
+#define NUM_SEGMENTS 4
 
 
 int world_rank;
@@ -62,37 +63,74 @@ void blur(png_info_t *png_info, distributed_info_t *distributed_info)
 	png_bytep * bottom_row_pointers = (png_bytep *) malloc(sizeof(png_bytep));
 	bottom_row_pointers[0] = (png_byte*) malloc(png_get_rowbytes(png_info->png_ptr,png_info->info_ptr) + 1);
 
-	// Actual computations
+	if (world_rank != world_size - 1) {
+		MPI_Send(&(row_pointers_post_bv[distributed_info->local_max_height - 1]), png_get_rowbytes(png_info->png_ptr,png_info->info_ptr),
+				 MPI_BYTE, world_rank + 1, BLUR_COMM_TAG, 
+    		     MPI_COMM_WORLD);
+		/**
+		MPI_Recv(top_row_pointers[0], png_get_rowbytes(png_info->png_ptr,png_info->info_ptr),
+				 MPI_BYTE, world_rank + 1, BLUR_COMM_TAG, 
+				 MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+		**/
+	}
+
+	if (world_rank != 0) {
+		MPI_Send(&(row_pointers_post_bv[distributed_info->local_min_height]), png_get_rowbytes(png_info->png_ptr,png_info->info_ptr),
+				 MPI_BYTE, world_rank - 1, BLUR_COMM_TAG, 
+				 MPI_COMM_WORLD);
+		/**
+		MPI_Recv(bottom_row_pointers[0], png_get_rowbytes(png_info->png_ptr, png_info->info_ptr),
+				 MPI_BYTE, world_rank - 1, BLUR_COMM_TAG, 
+				 MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+		**/
+	}
+	int segment_size = (distributed_info->local_max_width - distributed_info->local_min_width) / NUM_SEGMENTS;
+
+	//  Vertical blur
 	for (int y = distributed_info->local_min_height; y < distributed_info->local_max_height; y++) {
 		png_byte* bv_row  = row_pointers_post_bv[y];
 		if (y == distributed_info->local_min_height) {
-			for (int x = distributed_info->local_min_width; x < distributed_info->local_max_width; x++) {
+			for (int x = distributed_info->local_min_width; x < distributed_info->local_max_width; x+= segment_size) {
+				MPI_Recv(top_row_pointers[0], png_get_row_bytes(png_info->png_ptr, png_info->info_ptr)/ NUM_SEGMENTS,
+						 MPI_BYTE, world_rank + 1, BLUR_COMM_TAG, 
+						 MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+				// Receive necessary segment as you need it
 				png_byte* bv_ptr = &(bv_row[x*3]);
 				// iterate over bh rows needed
-				for (int j = 0; j <= 1; j++) {
-					// iterate over r, g, and b
-					for (int i = 0; i <= 2; i++) {
-						png_byte* bh_row_ptr = &(row_pointers_post_bh[y + j][x * 3]);
-						bv_ptr[i] += bh_row_ptr[i]/3;
-					}	
+				for (int k = 0; k < segment_size; k++) {
+					for (int j = 0; j <= 1; j++) {
+						// iterate over r, g, and b
+						for (int i = 0; i <= 2; i++) {
+							png_byte* bh_row_ptr = &(row_pointers_post_bh[y + j][(x+k)* 3]);
+							bv_ptr[i] += bh_row_ptr[i]/3;
+						}	
+					}
 				}
 			}
 		} else if (y == distributed_info->local_max_height - 1) {
-			for (int x = distributed_info->local_min_width; x < distributed_info->local_max_width; x++) {
+			for (int x = distributed_info->local_min_width; x < distributed_info->local_max_width; x+ segment_size) {
 				png_byte* bv_ptr = &(bv_row[x*3]);
 				// iterate over bh rows needed
-				for (int j =-1; j <= 0; j++) {
-					// iterate over r, g, and b
-					for (int i = 0; i <= 2; i++) {
-						png_byte* bh_row_ptr = &(row_pointers_post_bh[y + j][x * 3]);
-						bv_ptr[i] += bh_row_ptr[i]/3;
-					}	
+
+				MPI_Recv(bottom_row_pointers[0], png_get_rowbytes(png_info->png_ptr, png_info->info_ptr)/NUM_SEGMENTS,
+						 MPI_BYTE, world_rank - 1, BLUR_COMM_TAG, 
+						 MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+				for (int k = 0; k < segment_size; k++) {
+					for (int j =-1; j <= 0; j++) {
+						// iterate over r, g, and b
+						for (int i = 0; i <= 2; i++) {
+							png_byte* bh_row_ptr = &(row_pointers_post_bh[y + j][(x+k) * 3]);
+							bv_ptr[i] += bh_row_ptr[i]/3;
+						}	
+					}
 				}
 			}
 		} else {
 			for (int x = distributed_info->local_min_width; x < distributed_info->local_max_width; x++) {
 				png_byte* bv_ptr = &(bv_row[x*3]);
 				// iterate over bh rows needed
+
+				// Receive necessary segment as you need it
 				for (int j = -1; j <= 1; j++) {
 					// iterate over r, g, and b
 					for (int i = 0; i <= 2; i++) {
@@ -116,6 +154,18 @@ int main(int argc, char **argv)
 {
 	if (argc != 3)
 		abort_("Usage: program_name <file_in> <file_out>");
+
+	MPI_Init(&argc, &argv);
+	
+	MPI_Comm_rank(MPI_COMM_WORLD, &world_rank);
+
+	MPI_Comm_size(MPI_COMM_WORLD, &world_size);
+
+	char processor_name[MPI_MAX_PROCESSOR_NAME];
+	int name_len;
+	MPI_Get_processor_name(processor_name, &name_len);
+
+    printf( "Hello world from processor %s, rank %d of %d\n", processor_name, world_rank, world_size);
 
 	// Read file + setup logic
 	png_info_t* png_info = malloc(sizeof(png_info_t));
@@ -170,6 +220,7 @@ int main(int argc, char **argv)
 	free(row_pointers_post_bv);
 	free(png_info);
 
+	MPI_Finalize();
 	return 0;
 }
 
