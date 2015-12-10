@@ -19,6 +19,7 @@
 #include "distributed_blur.h"
 
 #define BLUR_COMM_TAG 5
+#define NUM_BYTES_IN_PIXEL 3
 
 int world_rank;
 int world_size;
@@ -30,38 +31,32 @@ png_bytep * row_pointers_post_bv; // bv(x,y)
 
 png_bytep * row_pointers;    // not used for computations, only in call to read_png_file
 char * image; 							 // each pixel = 3 bytes = 3 chars. 
-char * row_pointers_post_bh; // bh(x,y)
-char * row_pointers_post_bv; // bv(x,y)
+char * image_post_bh; // bh(x,y)
+char * image_post_bv; // bv(x,y)
 
 void blur(png_info_t *png_info, distributed_info_t *distributed_info) 
 {
+	int local_width = distributed_info->local_max_width - distributed_info->local_min_width;
 	// horizontal blur : NEED REGION = HAVE REGION.
 	for (int y = distributed_info->local_min_height; y < distributed_info->local_max_height; y++) {
-		png_byte* row = row_pointers[y];
-		png_byte* bh_row = row_pointers_post_bh[y];
+		int row_offset = y * local_width;
 		for (int x = distributed_info->local_min_width; x < distributed_info->local_max_width; x++) {
-			png_byte* bh_ptr = &(bh_row[x*3]);
+			int pixel_offset = row_offset + x * NUM_BYTES_IN_PIXEL;
 			if (x == distributed_info->local_min_width) {
-				png_byte* row_ptr_b = &(row[x*3]);
-				png_byte* row_ptr_c = &(row[(x+1)*3]);
-				for (int i=0; i<=2; i++) {
-					bh_ptr[i] = (row_ptr_b[i] + row_ptr_c[i])/2;
+				for (int pixel_byte = 0; pixel_byte < NUM_BYTES_IN_PIXEL; pixel_byte++) {
+					image_post_bh[pixel_offset + pixel_byte] = (image[pixel_offset + pixel_byte] + 										   \
+																											image[pixel_offset + NUM_BYTES_IN_PIXEL + pixel_byte]) / 2;
 				}
-			} else if (x == distributed_info->local_max_width - 1) {
-				png_byte* row_ptr_a = &(row[(x-1)*3]);
-				png_byte* row_ptr_b = &(row[x*3]);
-				for (int i=0; i<=2; i++) {
-					bh_ptr[i] = (row_ptr_a[i] + row_ptr_b[i])/2;
+			}	else if (x == distributed_info->local_max_width - 1) {
+				for (int pixel_byte = 0; pixel_byte < NUM_BYTES_IN_PIXEL; pixel_byte++) {
+					image_post_bh[pixel_offset + pixel_byte] = (image[pixel_offset - NUM_BYTES_IN_PIXEL + pixel_byte] +  \
+																										  image[pixel_offset + pixel_byte] ) / 2;
 				}
 			} else {
-				// row_ptr pixels before, at, and after
-				png_byte* row_ptr_a = &(row[(x-1)*3]);
-				png_byte* row_ptr_b = &(row[x*3]);
-				png_byte* row_ptr_c = &(row[(x+1)*3]);
-
-				// iterate over r, g, and b
-				for (int i=0; i<=2; i++) {
-					bh_ptr[i] = (row_ptr_a[i] + row_ptr_b[i] + row_ptr_c[i])/3;
+				for (int pixel_byte = 0; pixel_byte < NUM_BYTES_IN_PIXEL; pixel_byte++) {
+					image_post_bh[pixel_offset + pixel_byte] = (image[pixel_offset - NUM_BYTES_IN_PIXEL + pixel_byte] +  \
+																										  image[pixel_offset + pixel_byte] + 											 \
+																											image[pixel_offset + NUM_BYTES_IN_PIXEL + pixel_byte]) / 3;
 				}
 			}
 		}
@@ -76,7 +71,7 @@ void blur(png_info_t *png_info, distributed_info_t *distributed_info)
 	bottom_row_pointers[0] = (png_byte*) malloc(png_get_rowbytes(png_info->png_ptr,png_info->info_ptr) + 1);
 
 	if (world_rank != world_size - 1) {
-		MPI_Send(&(row_pointers_post_bv[distributed_info->local_max_height - 1]), png_get_rowbytes(png_info->png_ptr,png_info->info_ptr),
+		MPI_Send(&(image_post_bh[distributed_info->local_max_height - 1]), png_get_rowbytes(png_info->png_ptr,png_info->info_ptr),
 				 MPI_BYTE, world_rank + 1, BLUR_COMM_TAG, 
     		     MPI_COMM_WORLD);
 		MPI_Recv(top_row_pointers[0], png_get_rowbytes(png_info->png_ptr,png_info->info_ptr),
@@ -85,7 +80,7 @@ void blur(png_info_t *png_info, distributed_info_t *distributed_info)
 	}
 
 	if (world_rank != 0) {
-		MPI_Send(&(row_pointers_post_bv[distributed_info->local_min_height]), png_get_rowbytes(png_info->png_ptr,png_info->info_ptr),
+		MPI_Send(&(image_post_bh[distributed_info->local_min_height]), png_get_rowbytes(png_info->png_ptr,png_info->info_ptr),
 				 MPI_BYTE, world_rank - 1, BLUR_COMM_TAG, 
 				 MPI_COMM_WORLD);
 		MPI_Recv(bottom_row_pointers[0], png_get_rowbytes(png_info->png_ptr, png_info->info_ptr),
@@ -95,45 +90,36 @@ void blur(png_info_t *png_info, distributed_info_t *distributed_info)
 
 	// Actual computations
 	for (int y = distributed_info->local_min_height; y < distributed_info->local_max_height; y++) {
-		png_byte* bv_row  = row_pointers_post_bv[y];
+		int row_offset = y * local_width;
 		if (y == distributed_info->local_min_height) {
 			for (int x = distributed_info->local_min_width; x < distributed_info->local_max_width; x++) {
-				png_byte* bv_ptr = &(bv_row[x*3]);
-				// iterate over bh rows needed
-				for (int j = 0; j <= 1; j++) {
-					// iterate over r, g, and b
-					for (int i = 0; i <= 2; i++) {
-						png_byte* bh_row_ptr = &(row_pointers_post_bh[y + j][x * 3]);
-						bv_ptr[i] += bh_row_ptr[i]/3;
-					}	
+				int pixel_offset = row_offset + x * NUM_BYTES_IN_PIXEL;
+				for (int pixel_byte = 0; pixel_byte < NUM_BYTES_IN_PIXEL; pixel_byte++) {
+					image_post_bv[pixel_offset + pixel_byte] = (image_post_bh[pixel_offset + pixel_byte] + 							\
+																										  image_post_bh[pixel_offset + local_width + pixel_byte]) / 2;
 				}
 			}
+
 		} else if (y == distributed_info->local_max_height - 1) {
 			for (int x = distributed_info->local_min_width; x < distributed_info->local_max_width; x++) {
-				png_byte* bv_ptr = &(bv_row[x*3]);
-				// iterate over bh rows needed
-				for (int j =-1; j <= 0; j++) {
-					// iterate over r, g, and b
-					for (int i = 0; i <= 2; i++) {
-						png_byte* bh_row_ptr = &(row_pointers_post_bh[y + j][x * 3]);
-						bv_ptr[i] += bh_row_ptr[i]/3;
-					}	
+				int pixel_offset = row_offset + x * NUM_BYTES_IN_PIXEL;
+				for (int pixel_byte = 0; pixel_byte < NUM_BYTES_IN_PIXEL; pixel_byte++) {
+					image_post_bv[pixel_offset + pixel_byte] = (image_post_bh[pixel_offset - local_width + pixel_byte] +  \
+																											image_post_bh[pixel_offset + pixel_byte]) / 2;
 				}
 			}
 		} else {
 			for (int x = distributed_info->local_min_width; x < distributed_info->local_max_width; x++) {
-				png_byte* bv_ptr = &(bv_row[x*3]);
-				// iterate over bh rows needed
-				for (int j = -1; j <= 1; j++) {
-					// iterate over r, g, and b
-					for (int i = 0; i <= 2; i++) {
-						png_byte* bh_row_ptr = &(row_pointers_post_bh[y + j][x * 3]);
-						bv_ptr[i] += bh_row_ptr[i]/3;
-					}	
+				int pixel_offset = row_offset + x * NUM_BYTES_IN_PIXEL;
+				for (int pixel_byte = 0; pixel_byte < NUM_BYTES_IN_PIXEL; pixel_byte++) {
+					image_post_bv[pixel_offset + pixel_byte] = (image_post_bh[pixel_offset - local_width + pixel_byte] +  \
+																											image_post_bh[pixel_offset + pixel_byte] + 							  \
+																										  image_post_bh[pixel_offset + local_width + pixel_byte]) / 3;
 				}
 			}
 		}
 	}
+		
 	free(top_row_pointers[0]);
 	free(bottom_row_pointers[0]);
 	free(top_row_pointers);
@@ -164,21 +150,12 @@ int main(int argc, char **argv)
 	row_pointers = (png_bytep*) malloc(sizeof(png_bytep) * png_info->height);
 	for (int y=0; y < png_info->height; y++)
 		row_pointers[y] = (png_byte*) malloc(png_get_rowbytes(png_info->png_ptr,png_info->info_ptr));
-	/**
-	row_pointers_post_bh = (png_bytep*) malloc(sizeof(png_bytep) * png_info->height);
-	for (int y=0; y < png_info->height; y++)
-		row_pointers_post_bh[y] = (png_byte*) malloc(png_get_rowbytes(png_info->png_ptr,png_info->info_ptr));
-	row_pointers_post_bv = (png_bytep*) malloc(sizeof(png_bytep) * png_info->height);
-	for (int y=0; y < png_info->height; y++)
-		row_pointers_post_bv[y] = (png_byte*) malloc(png_get_rowbytes(png_info->png_ptr,png_info->info_ptr));
-	**/
-
 	read_png_file(&row_pointers, png_info, fp);
 
 	int total_size = png_info->width * png_info->height * sizeof(char) * 3;
 	image = malloc(total_size);
-	row_pointers_post_bh = malloc(total_size);
-	row_pointers_post_bv = malloc(total_size);
+	image_post_bh = malloc(total_size);
+	image_post_bv = malloc(total_size);
 	memset(image, 0, total_size);
 
 	// Distributed preparation logic
@@ -217,16 +194,16 @@ int main(int argc, char **argv)
 	printf("average total time: %f seconds\n", ((end.tv_sec - start.tv_sec) + (end.tv_nsec - start.tv_nsec)/1e9)/30);
 	
 	// Write file + cleanup logic
-	write_png_file(argv[2], &row_pointers_post_bv, png_info);
+	// write_png_file(argv[2], &image_post_bv, png_info);
 
 	free(distributed_info);
-	free(image)
+	free(image);
 	free(row_pointers);
-	free(row_pointers_post_bh);
-	free(row_pointers_post_bv);
+	free(image_post_bh);
+	free(image_post_bv);
 	free(png_info);
 
-	MPI_Finalize();
+  MPI_Finalize();
 	return 0;
 }
 

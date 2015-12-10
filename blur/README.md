@@ -24,9 +24,9 @@
 #	Distributed Blur.   make distributed-blur. make run-distributed-blur
 #
 # Current Runtimes. Image = width 768, height 1280
-# - Distributed Blur - w/o array init optimization. : 0.009201 seconds
-# - Distributed Halide.															: 0.037810 seconds
-#
+# - Distributed Blur - w/o array init optimization. : 0.037810 seconds
+# - Distributed Blur - w/  array init optimization. : 0.022250 seconds
+# - Distributed Halide.															: 0.009201 seconds
 #
 # HIGH LEVEL ANALYSIS - PERFORMANCE TRADEOFFS TO CONSIDER
 #
