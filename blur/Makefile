@@ -34,5 +34,5 @@ check:
 	./compare distributed_blur_out.png blur_out.png
 
 clean:
-	rm blur distributed_blur compare read_write_png.o
+	rm blur distributed_blur compare read_write_png.o distributed_blur_segments
 

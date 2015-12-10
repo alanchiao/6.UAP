@@ -87,18 +87,34 @@ void blur(png_info_t *png_info, distributed_info_t *distributed_info)
 		if (y == distributed_info->local_min_height) {
 			for (int x = distributed_info->local_min_width; x < distributed_info->local_max_width; x++) {
 				int pixel_offset = row_offset + x * NUM_BYTES_IN_PIXEL;
-				for (int pixel_byte = 0; pixel_byte < NUM_BYTES_IN_PIXEL; pixel_byte++) {
-					image_post_bv[pixel_offset + pixel_byte] = (image_post_bh[pixel_offset + pixel_byte] + 							\
-																										  image_post_bh[pixel_offset + local_width + pixel_byte]) >> 1;
+				if (world_rank != 0) {
+					for (int pixel_byte = 0; pixel_byte < NUM_BYTES_IN_PIXEL; pixel_byte++) {
+						image_post_bv[pixel_offset + pixel_byte] = (bottom_row[x * NUM_BYTES_IN_PIXEL + pixel_byte]    +              \
+																												image_post_bh[pixel_offset + pixel_byte] + 							\
+																												image_post_bh[pixel_offset + local_width + pixel_byte]) / 3;
+					}
+				} else {
+					for (int pixel_byte = 0; pixel_byte < NUM_BYTES_IN_PIXEL; pixel_byte++) {
+						image_post_bv[pixel_offset + pixel_byte] = (image_post_bh[pixel_offset + pixel_byte] + 							\
+																												image_post_bh[pixel_offset + local_width + pixel_byte]) >> 1;
+					}
 				}
 			}
 
 		} else if (y == distributed_info->local_max_height - 1) {
 			for (int x = distributed_info->local_min_width; x < distributed_info->local_max_width; x++) {
 				int pixel_offset = row_offset + x * NUM_BYTES_IN_PIXEL;
-				for (int pixel_byte = 0; pixel_byte < NUM_BYTES_IN_PIXEL; pixel_byte++) {
-					image_post_bv[pixel_offset + pixel_byte] = (image_post_bh[pixel_offset - local_width + pixel_byte] +  \
-																											image_post_bh[pixel_offset + pixel_byte]) >> 1;
+				if (world_rank != world_size - 1) {
+					for (int pixel_byte = 0; pixel_byte < NUM_BYTES_IN_PIXEL; pixel_byte++) {
+						image_post_bv[pixel_offset + pixel_byte] = (image_post_bh[pixel_offset - local_width + pixel_byte] +  \
+																												image_post_bh[pixel_offset + pixel_byte] +                \
+																												top_row[x * NUM_BYTES_IN_PIXEL + pixel_byte]) / 3;
+					}
+				} else {
+					for (int pixel_byte = 0; pixel_byte < NUM_BYTES_IN_PIXEL; pixel_byte++) {
+						image_post_bv[pixel_offset + pixel_byte] = (image_post_bh[pixel_offset - local_width + pixel_byte] +  \
+																												image_post_bh[pixel_offset + pixel_byte]) >> 1;
+					}
 				}
 			}
 		} else {
