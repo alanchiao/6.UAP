@@ -18,9 +18,14 @@
 # read-write-png.c : uses libpng to read and write to png files
 # compare.c : used to compare two png files A and B and make sure that they are equivalent pixel by pixel
 #
+# RUNNING THINGS
+# Distributed Halide. WITH-MPI=1, make-distributed-blur.
+#											MV2-ENABLE-AFFINITY=0 srun ...... (width, height)
+#	Distributed Blur.   make distributed-blur. make run-distributed-blur
 #
-#
-#
+# Current Runtimes. Image = width 768, height 1280
+# - Distributed Blur - w/o array init optimization. : 0.009201 seconds
+# - Distributed Halide.															: 
 #
 #
 # HIGH LEVEL ANALYSIS - PERFORMANCE TRADEOFFS TO CONSIDER
