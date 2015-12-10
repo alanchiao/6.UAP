@@ -24,11 +24,6 @@
 int world_rank;
 int world_size;
 
-/**
-png_bytep * row_pointers_post_bh; // bh(x,y)
-png_bytep * row_pointers_post_bv; // bv(x,y)
-**/
-
 png_bytep * row_pointers;    // not used for computations, only in call to read_png_file
 char * image; 							 // each pixel = 3 bytes = 3 chars. 
 char * image_post_bh; // bh(x,y)
@@ -45,12 +40,12 @@ void blur(png_info_t *png_info, distributed_info_t *distributed_info)
 			if (x == distributed_info->local_min_width) {
 				for (int pixel_byte = 0; pixel_byte < NUM_BYTES_IN_PIXEL; pixel_byte++) {
 					image_post_bh[pixel_offset + pixel_byte] = (image[pixel_offset + pixel_byte] + 										   \
-																											image[pixel_offset + NUM_BYTES_IN_PIXEL + pixel_byte]) / 2;
+																											image[pixel_offset + NUM_BYTES_IN_PIXEL + pixel_byte]) >> 1;
 				}
 			}	else if (x == distributed_info->local_max_width - 1) {
 				for (int pixel_byte = 0; pixel_byte < NUM_BYTES_IN_PIXEL; pixel_byte++) {
 					image_post_bh[pixel_offset + pixel_byte] = (image[pixel_offset - NUM_BYTES_IN_PIXEL + pixel_byte] +  \
-																										  image[pixel_offset + pixel_byte] ) / 2;
+																										  image[pixel_offset + pixel_byte] ) >> 1;
 				}
 			} else {
 				for (int pixel_byte = 0; pixel_byte < NUM_BYTES_IN_PIXEL; pixel_byte++) {
@@ -65,25 +60,23 @@ void blur(png_info_t *png_info, distributed_info_t *distributed_info)
 	// vertical blur : NEED REGION = HAVE REGION  + ONE LINE ABOVE AND BELOW.
 	// Communication of Intersect(N, H) to rank - 1 and + 1.
 	// Receiving necessary data from rank - 1 and + 1 also.
-	png_bytep * top_row_pointers = (png_bytep *) malloc(sizeof(png_bytep));
-	top_row_pointers[0] = (png_byte*) malloc(png_get_rowbytes(png_info->png_ptr,png_info->info_ptr));
-	png_bytep * bottom_row_pointers = (png_bytep *) malloc(sizeof(png_bytep));
-	bottom_row_pointers[0] = (png_byte*) malloc(png_get_rowbytes(png_info->png_ptr,png_info->info_ptr) + 1);
+	char* top_row = malloc(local_width * sizeof(char) * 3);
+	char* bottom_row = malloc(local_width * sizeof(char) * 3);
 
 	if (world_rank != world_size - 1) {
-		MPI_Send(&(image_post_bh[distributed_info->local_max_height - 1]), png_get_rowbytes(png_info->png_ptr,png_info->info_ptr),
+		MPI_Send(&(image_post_bh[(distributed_info->local_max_height - 1) * local_width]), local_width * 3,
 				 MPI_BYTE, world_rank + 1, BLUR_COMM_TAG, 
     		     MPI_COMM_WORLD);
-		MPI_Recv(top_row_pointers[0], png_get_rowbytes(png_info->png_ptr,png_info->info_ptr),
+		MPI_Recv(top_row, local_width * 3 ,
 				 MPI_BYTE, world_rank + 1, BLUR_COMM_TAG, 
 				 MPI_COMM_WORLD, MPI_STATUS_IGNORE);
 	}
 
 	if (world_rank != 0) {
-		MPI_Send(&(image_post_bh[distributed_info->local_min_height]), png_get_rowbytes(png_info->png_ptr,png_info->info_ptr),
+		MPI_Send(&(image_post_bh[(distributed_info->local_min_height) * local_width]), local_width * 3,
 				 MPI_BYTE, world_rank - 1, BLUR_COMM_TAG, 
 				 MPI_COMM_WORLD);
-		MPI_Recv(bottom_row_pointers[0], png_get_rowbytes(png_info->png_ptr, png_info->info_ptr),
+		MPI_Recv(bottom_row, local_width * 3,
 				 MPI_BYTE, world_rank - 1, BLUR_COMM_TAG, 
 				 MPI_COMM_WORLD, MPI_STATUS_IGNORE);
 	}
@@ -96,7 +89,7 @@ void blur(png_info_t *png_info, distributed_info_t *distributed_info)
 				int pixel_offset = row_offset + x * NUM_BYTES_IN_PIXEL;
 				for (int pixel_byte = 0; pixel_byte < NUM_BYTES_IN_PIXEL; pixel_byte++) {
 					image_post_bv[pixel_offset + pixel_byte] = (image_post_bh[pixel_offset + pixel_byte] + 							\
-																										  image_post_bh[pixel_offset + local_width + pixel_byte]) / 2;
+																										  image_post_bh[pixel_offset + local_width + pixel_byte]) >> 1;
 				}
 			}
 
@@ -105,7 +98,7 @@ void blur(png_info_t *png_info, distributed_info_t *distributed_info)
 				int pixel_offset = row_offset + x * NUM_BYTES_IN_PIXEL;
 				for (int pixel_byte = 0; pixel_byte < NUM_BYTES_IN_PIXEL; pixel_byte++) {
 					image_post_bv[pixel_offset + pixel_byte] = (image_post_bh[pixel_offset - local_width + pixel_byte] +  \
-																											image_post_bh[pixel_offset + pixel_byte]) / 2;
+																											image_post_bh[pixel_offset + pixel_byte]) >> 1;
 				}
 			}
 		} else {
@@ -120,10 +113,8 @@ void blur(png_info_t *png_info, distributed_info_t *distributed_info)
 		}
 	}
 		
-	free(top_row_pointers[0]);
-	free(bottom_row_pointers[0]);
-	free(top_row_pointers);
-	free(bottom_row_pointers);
+	free(top_row);
+	free(bottom_row);
 }
 
 ////////////////////////////////////////////////////////////////
