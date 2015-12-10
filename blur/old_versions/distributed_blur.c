@@ -24,15 +24,10 @@
 
 int world_rank;
 int world_size;
-/**
+
 png_bytep * row_pointers;
 png_bytep * row_pointers_post_bh; // bh(x,y)
 png_bytep * row_pointers_post_bv; // bv(x,y)
-**/
-
-char * image;
-char * row_pointers_post_bh; // bh(x,y)
-char * row_pointers_post_bv; // bv(x,y)
 
 void blur(png_info_t *png_info, distributed_info_t *distributed_info) 
 {
@@ -175,9 +170,11 @@ int main(int argc, char **argv)
 		row_pointers_post_bv[y] = (png_byte*) malloc(png_get_rowbytes(png_info->png_ptr,png_info->info_ptr));
 	read_png_file(&row_pointers, png_info, fp);
 
+	/**
 	int total_size = png_info->width * png_info->height * sizeof(char) * 3;
 	image = malloc(total_size);
 	memset(image, 0, total_size);
+	**/
 
 	// Distributed preparation logic
 	// Distribute chunks of png
