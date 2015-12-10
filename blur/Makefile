@@ -6,25 +6,25 @@ build:
 	make compare
 
 read_write_png:
-	gcc read_write_png.c -lpng16 -c -o read_write_png.o
+	gcc read_write_png.c -lpng12 -c -o read_write_png.o
 
 blur:
-	gcc blur.c -lpng16 -o blur 
+	gcc -std=c99 blur.c -lpng12 -o blur 
 
 distributed_blur:
-	mpicc distributed_blur.c -lpng16 -o distributed_blur read_write_png.o
+	mpicc distributed_blur.c -std=c99 -lpng12 -lrt -o distributed_blur read_write_png.o
 
 distributed_blur_segments:
-	mpicc distributed_blur_segments.c -lpng16 -o distributed_blur_segments read_write_png.o
+	mpicc distributed_blur_segments.c -std=c99 -lpng12 -o distributed_blur_segments read_write_png.o
 
 compare:
-	gcc compare.c -lpng16 -o compare -g -O0 -gdwarf-3 read_write_png.o
+	gcc compare.c -std=c99 -lpng12 -o compare -g -O0 -gdwarf-3 read_write_png.o
 
 run_distributed_blur:
-	mpirun -N 2 ./distributed_blur rgb.png distributed_blur_out.png
-
+	srun --exclusive -N 2 ./distributed_blur rgb.png distributed_blur_out.png
+	
 run_distributed_blur_segments:
-	mpirun -N 2 ./distributed_blur_segments rgb.png distributed_blur_segments_out.png
+	srun --exclusive -N 2 ./distributed_blur_segments rgb.png distributed_blur_segments_out.png
 
 run_blur:
 	./blur rgb.png blur_out.png
