@@ -26,6 +26,7 @@
 # Current Runtimes. Image = width 768, height 1280
 # - Distributed Blur - w/o array init optimization. : 0.037810 seconds
 # - Distributed Blur - w/  array init optimization. : 0.022610 seconds
+# - Distributed Blur Segmented Verson A 					  : 0.022466 seconds
 # - Distributed Halide.															: 0.009201 seconds
 #
 # HIGH LEVEL ANALYSIS - PERFORMANCE TRADEOFFS TO CONSIDER
