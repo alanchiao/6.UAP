@@ -23,10 +23,11 @@
 #											MV2-ENABLE-AFFINITY=0 srun ...... (width, height)
 #	Distributed Blur.   make distributed-blur. make run-distributed-blur
 #
-# Current Runtimes. Image = width 768, height 1280
-# - Distributed Blur - w/o array init optimization. : 0.037810 seconds
-# - Distributed Blur - w/  array init optimization. : 0.022610 seconds
-# - Distributed Blur Segmented Verson A 					  : 0.022466 seconds
+# Current Runtimes. Image = width 768, height 1280. 2 Cores.
+# - Distributed Blur - w/  array init optimization. : 0.017753 seconds
+# - Distributed Blur Segmented Version A (1 segment ): 0.017827 seconds
+# - Distributed Blur Segmented Version A (2 segments): 0.017860 seconds
+# - Distributed Blur Segmented Version A (4 segments): 0.018100 seconds
 # - Distributed Halide.															: 0.009201 seconds
 #
 # HIGH LEVEL ANALYSIS - PERFORMANCE TRADEOFFS TO CONSIDER

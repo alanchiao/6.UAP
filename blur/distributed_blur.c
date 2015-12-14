@@ -194,11 +194,11 @@ int main(int argc, char **argv)
 	struct timespec start;
 	struct timespec end;
 	clock_gettime(CLOCK_MONOTONIC, &start);
-	for (int iter = 0; iter < 30; iter++) {
+	for (int iter = 0; iter < 1000; iter++) {
 		blur(png_info, distributed_info); // region goes from local_min_height to local_max_height - 1
 	}
 	clock_gettime(CLOCK_MONOTONIC, &end);
-	printf("average total time: %f seconds\n", ((end.tv_sec - start.tv_sec) + (end.tv_nsec - start.tv_nsec)/1e9)/30);
+	printf("average total time: %f seconds\n", ((end.tv_sec - start.tv_sec) + (end.tv_nsec - start.tv_nsec)/1e9)/1000);
 	
 	// Write file + cleanup logic
 	// write_png_file(argv[2], &image_post_bv, png_info);
