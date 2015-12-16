@@ -15,7 +15,7 @@ distributed_blur:
 	mpicc distributed_blur.c -std=c99 -lpng12 -lrt -o distributed_blur read_write_png.o
 
 distributed_blur_segments:
-	mpicc distributed_blur_segments_a.c -std=c99 -lpng12 -o distributed_blur_segments read_write_png.o
+	mpicc distributed_blur_segments_b.c -std=c99 -lpng12 -o distributed_blur_segments read_write_png.o
 
 compare:
 	gcc compare.c -std=c99 -lpng12 -o compare -g -O0 -gdwarf-3 read_write_png.o

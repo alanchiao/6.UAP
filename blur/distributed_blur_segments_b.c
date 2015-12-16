@@ -25,29 +25,40 @@
 
 #define BLUR_COMM_TAG 5
 #define NUM_BYTES_IN_PIXEL 3
-#define NUM_SEGMENTS 8
+#define NUM_SEGMENTS 4
 
-int world_rank;
-int world_size;
+int world_rank; // MPI world rank of this node
+int world_size; // MPI world size
 
 png_bytep * row_pointers;    // not used for computations, only in call to read_png_file
 char * image; 							 // each pixel = 3 bytes = 3 chars. 
-char * image_post_bh; // bh(x,y)
-char * image_post_bv; // bv(x,y)
+char * image_post_bh; 		   // bh(x,y)
+char * image_post_bv; 		   // bv(x,y)
 
 void blur(png_info_t *png_info, distributed_info_t *distributed_info) 
 {
 	int local_width = distributed_info->local_max_width - distributed_info->local_min_width;
-	// horizontal blur : NEED REGION = HAVE REGION.
+	int segment_size = local_width / NUM_SEGMENTS;
+
+	// Vars to decide when a segment of data has been computed to be sent over
+	// to other node and what to send.
+	int elts_in_bottom_row_added = 0;
+	int bottom_row_segment_num = 0;
+	int elts_in_top_row_added = 0;
+	int top_row_segment_num = 0;
+
 	for (int y = distributed_info->local_min_height; y < distributed_info->local_max_height; y++) {
 		int row_offset = y * local_width;
 		for (int x = distributed_info->local_min_width; x < distributed_info->local_max_width; x++) {
 			int pixel_offset = row_offset + x * NUM_BYTES_IN_PIXEL;
+			// Each conditional is for left/right boundary checks.
 			if (x == distributed_info->local_min_width) {
+				// Each pixel consists of three bytes for rgb.
 				for (int pixel_byte = 0; pixel_byte < NUM_BYTES_IN_PIXEL; pixel_byte++) {
 					image_post_bh[pixel_offset + pixel_byte] = (image[pixel_offset + pixel_byte] + 										   \
 																											image[pixel_offset + NUM_BYTES_IN_PIXEL + pixel_byte]) >> 1;
 				}
+
 			}	else if (x == distributed_info->local_max_width - 1) {
 				for (int pixel_byte = 0; pixel_byte < NUM_BYTES_IN_PIXEL; pixel_byte++) {
 					image_post_bh[pixel_offset + pixel_byte] = (image[pixel_offset - NUM_BYTES_IN_PIXEL + pixel_byte] +  \
@@ -60,6 +71,36 @@ void blur(png_info_t *png_info, distributed_info_t *distributed_info)
 																											image[pixel_offset + NUM_BYTES_IN_PIXEL + pixel_byte]) / 3;
 				}
 			}
+
+
+			if (y == distributed_info->local_min_height) {
+				elts_in_bottom_row_added += 1;
+
+				// Send segment_size when that much has been computed to rank below
+				if (elts_in_bottom_row_added == segment_size) {
+					elts_in_bottom_row_added = 0;
+					if (world_rank != 0) {
+						MPI_Send(&(image_post_bh[(distributed_info->local_min_height) * local_width + bottom_row_segment_num * segment_size * NUM_BYTES_IN_PIXEL]), segment_size * NUM_BYTES_IN_PIXEL,
+							 MPI_BYTE, world_rank - 1, BLUR_COMM_TAG, 
+							 MPI_COMM_WORLD);
+					}
+					bottom_row_segment_num += 1;
+				}
+			}
+			if (y == distributed_info->local_max_height - 1) {
+				elts_in_top_row_added += 1;
+
+				// Send segment_size when that much has been computed to rank above
+				if (elts_in_top_row_added == segment_size) {
+					elts_in_top_row_added = 0;
+					if (world_rank != world_size - 1) {
+						MPI_Send(&(image_post_bh[(distributed_info->local_max_height - 1) * local_width + top_row_segment_num * segment_size * NUM_BYTES_IN_PIXEL]), segment_size * NUM_BYTES_IN_PIXEL,
+								 MPI_BYTE, world_rank + 1, BLUR_COMM_TAG, 
+										 MPI_COMM_WORLD);
+					}
+					top_row_segment_num += 1;
+				}
+			}
 		}
 	}
 
@@ -68,45 +109,15 @@ void blur(png_info_t *png_info, distributed_info_t *distributed_info)
 	// Receiving necessary data from rank - 1 and + 1 also.
 	char* top_row = malloc(local_width * sizeof(char) * NUM_BYTES_IN_PIXEL);
 	char* bottom_row = malloc(local_width * sizeof(char) * NUM_BYTES_IN_PIXEL);
-	int segment_size = local_width / NUM_SEGMENTS;
 
-	if (world_rank != world_size - 1) {
-		// Send data as NUM_SEGMENTS chunks
-		for (int i = 0; i < NUM_SEGMENTS; i++) {
-			MPI_Send(&(image_post_bh[(distributed_info->local_max_height - 1) * local_width + i * segment_size * NUM_BYTES_IN_PIXEL]), segment_size * NUM_BYTES_IN_PIXEL,
-					 MPI_BYTE, world_rank + 1, BLUR_COMM_TAG, 
-							 MPI_COMM_WORLD);
-		}
-		/**
-		MPI_Recv(top_row, local_width * 3 ,
-				 MPI_BYTE, world_rank + 1, BLUR_COMM_TAG, 
-				 MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-		**/
-	}
-
-	if (world_rank != 0) {
-		for (int i = 0; i < NUM_SEGMENTS; i++) {
-			MPI_Send(&(image_post_bh[(distributed_info->local_min_height) * local_width + i * segment_size * NUM_BYTES_IN_PIXEL]), segment_size * NUM_BYTES_IN_PIXEL,
-				 MPI_BYTE, world_rank - 1, BLUR_COMM_TAG, 
-				 MPI_COMM_WORLD);
-		}
-		/**
-		for (int i = 0; i < NUM_SEGMENTS; i++) {
-			MPI_Recv(bottom_row + i * segment_size * NUM_BYTES_IN_PIXEL, segment_size * NUM_BYTES_IN_PIXEL,
-					 MPI_BYTE, world_rank - 1, BLUR_COMM_TAG, 
-					 MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-		}
-		**/
-	}
-
-
-	// Actual computations
+	// Actual computations for vertical blur
 	for (int y = distributed_info->local_min_height; y < distributed_info->local_max_height; y++) {
 		int row_offset = y * local_width;
+		// Each conditional is for top/bottom boundary checks.
 		if (y == distributed_info->local_min_height) {
 			for (int x = distributed_info->local_min_width; x < distributed_info->local_max_width; x+= segment_size) {
 				int pixel_offset = row_offset + x * NUM_BYTES_IN_PIXEL;
-				if (world_rank != 0) {
+				if (world_rank != 0) { // not receiving bottom row for lowest ranked node
 					MPI_Recv(bottom_row + segment_size * NUM_BYTES_IN_PIXEL, segment_size * NUM_BYTES_IN_PIXEL,
 						MPI_BYTE, world_rank - 1, BLUR_COMM_TAG,
 						MPI_COMM_WORLD, MPI_STATUS_IGNORE);	
@@ -130,7 +141,7 @@ void blur(png_info_t *png_info, distributed_info_t *distributed_info)
 			// Receive chunk by chunk
 			for (int x = distributed_info->local_min_width; x < distributed_info->local_max_width; x+= segment_size) {
 				int pixel_offset = row_offset + x * NUM_BYTES_IN_PIXEL;
-				if (world_rank != world_size - 1) {
+				if (world_rank != world_size - 1) { // not receiving top row for highest ranked node
 					MPI_Recv(top_row + segment_size * NUM_BYTES_IN_PIXEL, segment_size * NUM_BYTES_IN_PIXEL, 
 						 MPI_BYTE, world_rank + 1, BLUR_COMM_TAG, 
 						 MPI_COMM_WORLD, MPI_STATUS_IGNORE);
