@@ -24,7 +24,7 @@
 
 #define BLUR_COMM_TAG 5
 #define NUM_BYTES_IN_PIXEL 3
-#define NUM_SEGMENTS 4
+#define NUM_SEGMENTS 1
 
 int world_rank; // MPI world rank of this node
 int world_size; // MPI world size

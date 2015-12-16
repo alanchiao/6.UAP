@@ -24,7 +24,7 @@ run_distributed_blur:
 	srun --exclusive -N 2 ./distributed_blur rgb.png distributed_blur_out.png
 	
 run_distributed_blur_segments:
-	srun --exclusive -N 2 ./distributed_blur_segments rgb.png distributed_blur_segments_out.png
+	srun --exclusive -N 8 ./distributed_blur_segments rgb.png distributed_blur_segments_out.png
 
 run_blur:
 	./blur rgb.png blur_out.png

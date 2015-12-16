@@ -25,7 +25,7 @@
 
 #define BLUR_COMM_TAG 5
 #define NUM_BYTES_IN_PIXEL 3
-#define NUM_SEGMENTS 4
+#define NUM_SEGMENTS 1
 
 int world_rank; // MPI world rank of this node
 int world_size; // MPI world size
@@ -37,8 +37,8 @@ char * image_post_bv; 		   // bv(x,y)
 
 void blur(png_info_t *png_info, distributed_info_t *distributed_info) 
 {
-	int local_width = distributed_info->local_max_width - distributed_info->local_min_width;
-	int segment_size = local_width / NUM_SEGMENTS;
+	int local_width = distributed_info->local_max_width - distributed_info->local_min_width; // in pixels
+	int segment_size = local_width / NUM_SEGMENTS; // in pixels
 
 	// Vars to decide when a segment of data has been computed to be sent over
 	// to other node and what to send.
@@ -80,7 +80,7 @@ void blur(png_info_t *png_info, distributed_info_t *distributed_info)
 				if (elts_in_bottom_row_added == segment_size) {
 					elts_in_bottom_row_added = 0;
 					if (world_rank != 0) {
-						MPI_Send(&(image_post_bh[(distributed_info->local_min_height) * local_width + bottom_row_segment_num * segment_size * NUM_BYTES_IN_PIXEL]), segment_size * NUM_BYTES_IN_PIXEL,
+						MPI_Send(image_post_bh + distributed_info->local_min_height * local_width + bottom_row_segment_num * segment_size * NUM_BYTES_IN_PIXEL, segment_size * NUM_BYTES_IN_PIXEL,
 							 MPI_BYTE, world_rank - 1, BLUR_COMM_TAG, 
 							 MPI_COMM_WORLD);
 					}
@@ -94,7 +94,7 @@ void blur(png_info_t *png_info, distributed_info_t *distributed_info)
 				if (elts_in_top_row_added == segment_size) {
 					elts_in_top_row_added = 0;
 					if (world_rank != world_size - 1) {
-						MPI_Send(&(image_post_bh[(distributed_info->local_max_height - 1) * local_width + top_row_segment_num * segment_size * NUM_BYTES_IN_PIXEL]), segment_size * NUM_BYTES_IN_PIXEL,
+						MPI_Send(image_post_bh + (distributed_info->local_max_height - 1) * local_width + top_row_segment_num * segment_size * NUM_BYTES_IN_PIXEL, segment_size * NUM_BYTES_IN_PIXEL,
 								 MPI_BYTE, world_rank + 1, BLUR_COMM_TAG, 
 										 MPI_COMM_WORLD);
 					}
@@ -118,7 +118,7 @@ void blur(png_info_t *png_info, distributed_info_t *distributed_info)
 			for (int x = distributed_info->local_min_width; x < distributed_info->local_max_width; x+= segment_size) {
 				int pixel_offset = row_offset + x * NUM_BYTES_IN_PIXEL;
 				if (world_rank != 0) { // not receiving bottom row for lowest ranked node
-					MPI_Recv(bottom_row + segment_size * NUM_BYTES_IN_PIXEL, segment_size * NUM_BYTES_IN_PIXEL,
+					MPI_Recv(bottom_row + x, segment_size * NUM_BYTES_IN_PIXEL,
 						MPI_BYTE, world_rank - 1, BLUR_COMM_TAG,
 						MPI_COMM_WORLD, MPI_STATUS_IGNORE);	
 
@@ -142,7 +142,7 @@ void blur(png_info_t *png_info, distributed_info_t *distributed_info)
 			for (int x = distributed_info->local_min_width; x < distributed_info->local_max_width; x+= segment_size) {
 				int pixel_offset = row_offset + x * NUM_BYTES_IN_PIXEL;
 				if (world_rank != world_size - 1) { // not receiving top row for highest ranked node
-					MPI_Recv(top_row + segment_size * NUM_BYTES_IN_PIXEL, segment_size * NUM_BYTES_IN_PIXEL, 
+					MPI_Recv(top_row + x * NUM_BYTES_IN_PIXEL, segment_size * NUM_BYTES_IN_PIXEL, 
 						 MPI_BYTE, world_rank + 1, BLUR_COMM_TAG, 
 						 MPI_COMM_WORLD, MPI_STATUS_IGNORE);
 
@@ -238,11 +238,11 @@ int main(int argc, char **argv)
 	struct timespec start;
 	struct timespec end;
 	clock_gettime(CLOCK_MONOTONIC, &start);
-	for (int iter = 0; iter < 30; iter++) {
+	for (int iter = 0; iter < 1000; iter++) {
 		blur(png_info, distributed_info); // region goes from local_min_height to local_max_height - 1
 	}
 	clock_gettime(CLOCK_MONOTONIC, &end);
-	printf("average total time: %f seconds\n", ((end.tv_sec - start.tv_sec) + (end.tv_nsec - start.tv_nsec)/1e9)/30);
+	printf("average total time: %f seconds\n", ((end.tv_sec - start.tv_sec) + (end.tv_nsec - start.tv_nsec)/1e9)/1000);
 	
 	// Write file + cleanup logic
 	// write_png_file(argv[2], &image_post_bv, png_info);
